@@ -1,12 +1,14 @@
 name: Stock Screener
 on:
-  workflow_dispatch: # Allows manual run
+  workflow_dispatch:
   schedule:
-    - cron: '30 21 * * *' # Runs every day at 21:30 UTC (9:30 PM UK)
+    - cron: '30 21 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial for saving the CSV files
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,18 +19,15 @@ jobs:
           python-version: '3.12'
 
       - name: Install Libraries
-        run: |
-          pip install yfinance pandas
+        run: pip install yfinance pandas
 
       - name: Execute Script
         run: python screener.py
 
-      - name: Save Results to Repository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Save Results
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add usa_hits.csv uk_hits.csv || echo "No files to add"
-          git commit -m "Update daily hits" || echo "No changes to commit"
+          git add usa_hits.csv uk_hits.csv
+          git commit -m "Daily Scan Update" || exit 0
           git push
