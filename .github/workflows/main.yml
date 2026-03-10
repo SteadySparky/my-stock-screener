@@ -1,6 +1,8 @@
 name: Stock Screener
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual run
+  schedule:
+    - cron: '30 21 * * *' # Runs every day at 21:30 UTC (9:30 PM UK)
 
 jobs:
   build:
@@ -20,3 +22,12 @@ jobs:
 
       - name: Execute Script
         run: python screener.py
+
+      - name: Save Results to Repository
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          # This line adds both files to the "Save" list
+          git add usa_hits.csv uk_hits.csv || exit 0
+          git commit -m "Update daily hits for US and UK" || exit 0
+          git push
