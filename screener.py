@@ -12,7 +12,40 @@ def calculate_rsi(series, period=14):
 def run_scan(filename, output_name):
     if not os.path.exists(filename):
         print(f"Error: {filename} not found!")
-        return []
+        # Create an empty file with headers so the Action doesn't fail
+        pd.DataFrame(columns=["Ticker", "RSI", "Price"]).to_csv(output_name, index=False)
+        return
+        
+    with open(filename, 'r') as f:
+        tickers = [line.strip() for line in f if line.strip()]
+
+    print(f"--- Scanning {len(tickers)} stocks from {filename} ---")
+    results = []
+    
+    for t in tickers:
+        try:
+            df = yf.download(t, period="1mo", interval="1d", progress=False)
+            if df is None or len(df) < 15: continue
+
+            df['RSI'] = calculate_rsi(df['Close'])
+            c = df['Close']
+            
+            is_dropping = (c.iloc[-1] < c.iloc[-2]) and (c.iloc[-2] < c.iloc[-3])
+            current_rsi = df['RSI'].iloc[-1]
+
+            if is_dropping and current_rsi < 50:
+                results.append({"Ticker": t, "RSI": round(current_rsi, 2), "Price": round(c.iloc[-1], 2)})
+        except:
+            continue
+            
+    # CRITICAL FIX: Always save the file, even if results is empty
+    df_hits = pd.DataFrame(results if results else [], columns=["Ticker", "RSI", "Price"])
+    df_hits.to_csv(output_name, index=False)
+    
+    if results:
+        print(f"Found {len(results)} matches in {filename}.")
+    else:
+        print(f"No matches in {filename}, created empty {output_name}.")
         
     with open(filename, 'r') as f:
         tickers = [line.strip() for line in f if line.strip()]
