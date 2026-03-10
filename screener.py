@@ -18,8 +18,7 @@ def get_settings():
                     if ':' in line:
                         key, val = line.split(':')
                         settings[key.strip().lower()] = int(val.strip())
-        except:
-            pass
+        except: pass
     return settings
 
 def run_scan(ticker_file, output_csv, rsi_limit, down_days):
@@ -35,23 +34,37 @@ def run_scan(ticker_file, output_csv, rsi_limit, down_days):
     
     for t in tickers:
         try:
-            df = yf.download(t, period="1mo", interval="1d", progress=False)
-            if df is None or len(df) < 15:
+            # FIX: auto_adjust=True and actions=False makes the data cleaner
+            df = yf.download(t, period="1mo", interval="1d", progress=False, auto_adjust=True)
+            
+            if df.empty or len(df) < 15:
                 continue
 
-            df['RSI'] = calculate_rsi(df['Close'])
-            close_prices = df['Close'].values.flatten()
+            # FIX: Ensure we are looking at the 'Close' column regardless of multi-index
+            if 'Close' in df.columns:
+                price_col = df['Close']
+            else:
+                # If yfinance used the ticker as a header, grab the first column
+                price_col = df.iloc[:, 0] 
+
+            # Calculate RSI on the clean price column
+            rsi_series = calculate_rsi(price_col)
             
             # Count consecutive drops
             drops = 0
+            # We use .values to avoid index issues
+            prices = price_col.values.flatten()
+            
             for i in range(1, down_days + 1):
-                if close_prices[-i] < close_prices[-(i+1)]:
+                if prices[-i] < prices[-(i+1)]:
                     drops += 1
                 else:
                     break
             
-            current_rsi = float(df['RSI'].iloc[-1])
-            current_price = float(df['Close'].iloc[-1])
+            current_rsi = float(rsi_series.iloc[-1])
+            current_price = float(prices[-1])
+
+            print(f"{t}: RSI {round(current_rsi,1)}, Drops {drops}")
 
             if drops >= down_days and current_rsi < rsi_limit:
                 results.append({
@@ -59,14 +72,16 @@ def run_scan(ticker_file, output_csv, rsi_limit, down_days):
                     "RSI": round(current_rsi, 2), 
                     "Price": round(current_price, 2)
                 })
-        except:
+        except Exception as e:
+            print(f"Error scanning {t}: {e}")
             continue
 
     df_hits = pd.DataFrame(results if results else [], columns=["Ticker", "RSI", "Price"])
     df_hits.to_csv(output_csv, index=False)
-    print(f"Saved {len(results)} matches to {output_csv}")
+    print(f"DONE: Found {len(results)} matches.")
 
 if __name__ == "__main__":
     s = get_settings()
+    print(f"Target: RSI < {s['rsi_limit']} and {s['down_days']}+ drops")
     run_scan('usa_tickers.txt', 'usa_hits.csv', s['rsi_limit'], s['down_days'])
     run_scan('uk_tickers.txt', 'uk_hits.csv', s['rsi_limit'], s['down_days'])
