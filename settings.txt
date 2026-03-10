@@ -1,2 +1,2 @@
-rsi_limit:80
-down_days:1
+rsi_limit:100
+down_days:0
