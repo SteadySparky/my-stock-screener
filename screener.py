@@ -1,37 +1,48 @@
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 
-# Mix of US and UK Tickers
-tickers = ["AAPL", "TSLA", "INTC", "PARA", "VOD.L", "BARC.L", "LLOY.L", "BT-A.L"]
+# List of stocks to check
+tickers = ["AAPL", "TSLA", "INTC", "PARA", "VOD.L", "BARC.L", "LLOY.L"]
+
+def calculate_rsi(series, period=14):
+    """Manually calculate RSI without extra libraries"""
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
 
 def screen():
-    print(f"Scanning {len(tickers)} stocks...")
+    print("Starting Market Scan...")
     results = []
+    
     for t in tickers:
         try:
+            # Download data
             df = yf.download(t, period="1mo", interval="1d", progress=False)
-            if len(df) < 10: continue
+            if len(df) < 15: continue
 
-            # RSI Calculation
-            df['RSI'] = ta.rsi(df['Close'], length=14)
+            # Calculate RSI
+            df['RSI'] = calculate_rsi(df['Close'])
             current_rsi = df['RSI'].iloc[-1]
 
             # 3-Day Drop Logic
-            # Checks if Today < Yesterday AND Yesterday < Day Before
-            three_day_drop = (df['Close'].iloc[-1] < df['Close'].iloc[-2]) and \
-                             (df['Close'].iloc[-2] < df['Close'].iloc[-3])
+            # Close[today] < Close[yesterday] AND Close[yesterday] < Close[day_before]
+            c = df['Close']
+            is_dropping = (c.iloc[-1] < c.iloc[-2]) and (c.iloc[-2] < c.iloc[-3])
 
-            if three_day_drop and current_rsi < 45:
-                results.append({"Ticker": t, "RSI": round(current_rsi, 2), "Price": round(df['Close'].iloc[-1], 2)})
-        except:
-            continue
+            print(f"Checked {t}: RSI is {round(current_rsi, 2)}")
+
+            # Criteria: RSI under 45 and 3-day price drop
+            if is_dropping and current_rsi < 45:
+                results.append({"Ticker": t, "RSI": round(current_rsi, 2), "Price": round(c.iloc[-1], 2)})
+
+        except Exception as e:
+            print(f"Error scanning {t}: {e}")
             
-    df_results = pd.DataFrame(results)
-    if not df_results.empty:
-        print("\n--- MATCHES FOUND ---")
-        print(df_results.to_string(index=False))
-        df_results.to_csv("hits.csv", index=False)
+    if results:
+        print("\n✅ MATCHES FOUND:")
+        print(pd.DataFrame(results).to_string(index=False))
     else:
         print("\nNo stocks matched the criteria today.")
 
