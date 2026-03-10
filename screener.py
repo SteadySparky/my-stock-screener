@@ -9,7 +9,18 @@ def calculate_rsi(series, period=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def run_scan(filename, output_name):
+def get_settings():
+    # Default values in case the file is missing
+    settings = {"rsi_limit": 50, "down_days": 3}
+    if os.path.exists('settings.txt'):
+        with open('settings.txt', 'r') as f:
+            for line in f:
+                if ':' in line:
+                    key, val = line.split(':')
+                    settings[key.strip()] = int(val.strip())
+    return settings
+
+def run_scan(filename, output_name, rsi_limit, down_days):
     if not os.path.exists(filename):
         pd.DataFrame(columns=["Ticker", "RSI", "Price"]).to_csv(output_name, index=False)
         return
@@ -26,20 +37,26 @@ def run_scan(filename, output_name):
             df['RSI'] = calculate_rsi(df['Close'])
             c = df['Close']
             
-            # Logic: 3-day drop + RSI < 50
-            is_dropping = (c.iloc[-1] < c.iloc[-2]) and (c.iloc[-2] < c.iloc[-3])
+            # Check for consecutive drops based on settings
+            drops = 0
+            for i in range(1, down_days + 1):
+                if c.iloc[-i] < c.iloc[-(i+1)]:
+                    drops += 1
+                else:
+                    break
+            
             current_rsi = df['RSI'].iloc[-1]
 
-            if is_dropping and current_rsi < 50:
+            if drops >= down_days and current_rsi < rsi_limit:
                 results.append({"Ticker": t, "RSI": round(current_rsi, 2), "Price": round(c.iloc[-1].item(), 2)})
         except:
             continue
             
-    # Always save, even if empty, to prevent GitHub Action errors
     df_hits = pd.DataFrame(results if results else [], columns=["Ticker", "RSI", "Price"])
     df_hits.to_csv(output_name, index=False)
-    print(f"Finished {filename}: Found {len(results)} matches.")
+    print(f"Finished {filename}: Found {len(results)} matches using RSI < {rsi_limit} and {down_days} down days.")
 
 if __name__ == "__main__":
-    run_scan('usa_tickers.txt', 'usa_hits.csv')
-    run_scan('uk_tickers.txt', 'uk_hits.csv')
+    s = get_settings()
+    run_scan('usa_tickers.txt', 'usa_hits.csv', s['rsi_limit'], s['down_days'])
+    run_scan('uk_tickers.txt', 'uk_hits.csv', s['rsi_limit'], s['down_days'])
