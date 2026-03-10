@@ -24,10 +24,11 @@ jobs:
         run: python screener.py
 
       - name: Save Results to Repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          # This line adds both files to the "Save" list
-          git add usa_hits.csv uk_hits.csv || exit 0
-          git commit -m "Update daily hits for US and UK" || exit 0
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add usa_hits.csv uk_hits.csv || echo "No files to add"
+          git commit -m "Update daily hits" || echo "No changes to commit"
           git push
