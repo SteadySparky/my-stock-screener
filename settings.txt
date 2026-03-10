@@ -1,0 +1,2 @@
+rsi_limit:50
+down_days:3
